@@ -1,0 +1,14 @@
+# secrets (never commit)
+.env
+.env.local
+.env.production
+
+# build and test output
+/bin/
+coverage.out
+
+# local server data
+/data/
+
+# macOS
+.DS_Store
