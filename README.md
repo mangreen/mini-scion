@@ -27,11 +27,11 @@
 
 ## 1. 目前進度
 
-**目前在 Phase 0(環境與骨架),分支 `phase/0-setup`。**
+**目前在 Phase 0(環境與骨架),分支 `phase/0-setup`。** `CLAUDE.md` 與 CI 已撰寫,等 CI 在 GitHub 上第一次全綠後,開 PR 合併並打 tag `phase-0-setup`。
 
 | Phase | 主題 | 狀態 |
 |---|---|---|
-| 0 | 環境與骨架 | 進行中:0.0 到 0.3 完成,0.4 `CLAUDE.md` 與 0.5 CI 待做 |
+| 0 | 環境與骨架 | 進行中:0.0 到 0.5 的檔案都已完成,待 CI 第一次執行結果 |
 | 1 | 內容定址 blob store | 待做 |
 | 2 | Changeset 與 WAL | 待做 |
 | 3 | Ref、CAS、server 端 commit | 待做 |
@@ -220,6 +220,7 @@ Commit 格式:`<type>(<scope>): <subject>`,type 為 `feat`、`fix`、`test`、`r
 - **測試金字塔:** Unit 約 70%(純 domain 與 use case,I/O 用 fake)、Integration 約 20%(adapter 搭配 `t.TempDir()`、`httptest`)、E2E 約 10%(只測關鍵 happy path,本機起三個 process)。
 - **一律 `-race`:** 沒有它,並發 bug 可能 97% 的時間都亮綠燈(實驗數據見 [MEM-0002](.agents/memories/MEM-0002-testing-discipline.md))。
 - **並發邏輯:** 結果斷言加 `-race`,必要時 `-count=N`;新測試做一次變異驗證。
+- **CI(GitHub Actions):** `test`(Go 1.24 與最新版各跑 `make check`)、`shell-macos`(用 Apple 內建的 bash 3.2 與 BSD grep 測試腳本)、`secrets`(gitleaks 掃完整歷史)、`vulncheck`(govulncheck)。設計見 [MEM-0004](.agents/memories/MEM-0004-ci-pipeline.md)。
 - **覆蓋率:** domain 與 application 層至少 80%,CI 低於門檻就失敗。門檻腳本在 Phase 1 隨第一批程式一起建立。
 - **機密:** 不得硬編碼任何密碼、金鑰、token、私鑰或連線字串;一律走環境變數;`make scan` 加 CI 的 gitleaks 兩層把關。細節見 [MEM-0003](.agents/memories/MEM-0003-secret-scanning.md)。
 - **API 原則(Phase 6 起):** DTO 白名單驗證、狀態變更端點支援 Idempotency-Key、JSON 結構化 log 含 trace-id、全域錯誤處理器回傳清理過的錯誤。
@@ -232,7 +233,9 @@ Commit 格式:`<type>(<scope>): <subject>`,type 為 `feat`、`fix`、`test`、`r
 | [`MEM-0002`](.agents/memories/MEM-0002-testing-discipline.md) | 測試紀律:`-race`、並發測試、變異驗證 |
 | [`MEM-0003`](.agents/memories/MEM-0003-secret-scanning.md) | 機密掃描器設計、新手常犯的錯、專家會留意的地方 |
 | [`todo.md`](todo.md) | 目前 Phase 的待辦清單 |
-| `CLAUDE.md` | 專案層級規範(Step 0.4 建立) |
+| [`CLAUDE.md`](CLAUDE.md) | 專案層級規範:協作模式、環境限制、工程原則、測試、安全、Git |
+| [`MEM-0004`](.agents/memories/MEM-0004-ci-pipeline.md) | CI 設計、新手常犯的錯、尚未驗證的清單 |
+| [`ci.yml`](.github/workflows/ci.yml) | GitHub Actions:race 測試、macOS shell 測試、gitleaks、govulncheck |
 | `CHANGELOG.md` | 值得注意的變更紀錄(隨第一個功能一起建立) |
 
 ## 11. 計畫修訂紀錄
@@ -245,6 +248,10 @@ Commit 格式:`<type>(<scope>): <subject>`,type 為 `feat`、`fix`、`test`、`r
 | 2026-10-15 | 新增四個 `doc.go` | `go vet ./...` 在沒有任何 Go 套件時會失敗;同時把分層依賴規則寫成文件 |
 | 2026-10-15 | 工作方式改為「我寫、你驗證」 | 逐行引導寫 shell 腳本的效率太低,價值在於理解設計 |
 | 2026-10-15 | 新增 `make test-scripts` 與 shell 腳本可攜性規則 | 本機是 bash 3.2 與 BSD 工具,已實測通過 |
+| 2026-10-16 | 重新切分 Phase 0 的 commit,新增 `.editorconfig`,移除多餘的 `.gitkeep` | 一個 commit 應對應一個邏輯單元;五個檔案缺少結尾換行 |
+| 2026-10-16 | CI 使用 Node 24 版 action:`checkout@v6`、`setup-go@v6`、`gitleaks-action@v3` | Node 20 已於 2026-09-16 從 GitHub 託管 runner 移除 |
+| 2026-10-16 | CI 新增 macOS job,以受限 `PATH` 用 Apple 的 bash 3.2 與 BSD grep 測試腳本 | 本機環境與 Linux runner 不同 |
+| 2026-10-16 | govulncheck 只在最新版 Go 上執行 | Go 1.24 已 EOL,其標準庫的已知漏洞不會回補,會讓 CI 永遠紅燈 |
 
 ## 參考
 
