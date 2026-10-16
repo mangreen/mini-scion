@@ -1,0 +1,102 @@
+# CI pipeline. Design and pitfalls: .agents/memories/MEM-0004-ci-pipeline.md
+name: ci
+
+on:
+  push:
+    branches: [main, "phase/**"]
+  pull_request:
+    branches: [main]
+
+# Least privilege: jobs get a read-only token unless they ask for more.
+permissions:
+  contents: read
+
+# A newer push to the same ref makes the older run pointless; cancel it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Mirror the dev machine (MEM-0001): never auto-download another toolchain.
+  GOTOOLCHAIN: local
+
+jobs:
+  test:
+    name: test (go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # Keep going so a failure on one Go version does not hide the other.
+      fail-fast: false
+      matrix:
+        # "1.24.x" is the floor the dev machine can run; "stable" catches
+        # problems we would meet after moving to a newer machine.
+        go: ["1.24.x", "stable"]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+          # NOTE: the module has no dependencies, hence no go.sum to key a cache on.
+          cache: false
+      - run: go version
+      # lint + race tests + shell-tool tests + secret scan (see Makefile)
+      - run: make check
+
+  shell-macos:
+    name: shell tools (macOS, bash 3.2, BSD grep)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # NOTE: runner images may put a newer bash and GNU tools first on PATH.
+      # A restricted PATH makes "#!/usr/bin/env bash" resolve to Apple's bash
+      # 3.2 and BSD grep, which is what the dev machine uses.
+      - name: Show the shell and grep that will be tested
+        run: |
+          export PATH=/bin:/usr/bin:/usr/sbin:/sbin
+          bash --version | head -1
+          command -v grep
+      - name: Test and run the scanner under Apple tools
+        run: |
+          export PATH=/bin:/usr/bin:/usr/sbin:/sbin
+          make test-scripts scan
+
+  secrets:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history: a secret removed in a later commit is still in history.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vulncheck:
+    name: vulnerability scan (govulncheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # NOTE: run on the newest Go only. Go 1.24 no longer gets security fixes,
+      # so scanning its standard library would stay red forever (MEM-0001).
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false
+      # FIXME: pin to an exact version once one has been checked.
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
